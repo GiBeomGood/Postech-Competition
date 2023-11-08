@@ -25,7 +25,7 @@ class Config:
 configs = Config(seq_len=72, pred_len=48, individual=True, enc_in=5)
 dlinear = Dlinear(configs).to(device)
 dlinear.load_state_dict(torch.load('checkpoints/errors_to_errors_1.pt'))
-print('dliear model load complete.')
+print('dlinear model load complete.')
 
 with torch.no_grad():
     errors_prediction = dlinear(errors_x).squeeze(dim=0)
