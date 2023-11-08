@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from tools.get_prediction_data import get_gen_forecast, get_weather_forecast, get_gen
 import torch
-from tools.DARNN import DARNN
+from tools.DARNN import QARNN
 device = torch.device('cuda')
 day_delta = lambda x: pd.Timedelta(days=x)
 
@@ -28,8 +28,8 @@ print('data preparation complete.')
 
 # final prediction
 y_pred = np.zeros((24, ))
-model = DARNN(72, 48, 18, 32, 32).to(device)
-model.load_state_dict(torch.load('checkpoints/darnn_best.pt'))
+model = QARNN(72, 48, 18, 32, 32).to(device)
+model.load_state_dict(torch.load('checkpoints/qarnn_best.pt'))
 print('model load complete.')
 
 model.eval()
