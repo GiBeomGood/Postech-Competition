@@ -1,5 +1,5 @@
 import torch
-from torch import nn, einsum
+from torch import nn, cos, sin, cat, tanh
 from torch.nn import functional as F
 
 
@@ -29,10 +29,10 @@ class InputAttention(nn.Module):
         self.n = n
 
     def forward(self, h_t, s_t, data):  # (1 x -1 x m), (1 x -1 x m)
-        query = torch.cat([h_t, s_t], dim=2).permute(1, 0, 2)  # (1 x -1 x 2m) -> (-1 x 1 x 2m)
+        query = cat([h_t, s_t], dim=2).permute(1, 0, 2)  # (1 x -1 x 2m) -> (-1 x 1 x 2m)
         query = query.repeat(1, self.n, 1)  # (-1 x n x 2m)
 
-        alpha_t = torch.tanh(
+        alpha_t = tanh(
             self.W_e(query) + self.U_e(data.permute(0, 2, 1)))  # (-1 x n x T)
         alpha_t = self.v_e(alpha_t).permute(0, 2, 1)  # (-1 x 1 x n)
         alpha_t = self.softmax(alpha_t)  # (-1 x 1 x n)
@@ -65,10 +65,10 @@ class TemporalAttention(nn.Module):
 
     def forward(self, d_t, s_t, H):  # (1 x -1 x p)
         T = H.shape[1]
-        query = torch.cat([d_t, s_t], dim=2).permute(1, 0, 2)  # (1 x -1 x 2p) -> (-1 x 1 x 2p)
+        query = cat([d_t, s_t], dim=2).permute(1, 0, 2)  # (1 x -1 x 2p) -> (-1 x 1 x 2p)
         query = query.repeat(1, T, 1) # (-1 x T x 2p)
 
-        beta_t = torch.tanh(self.W_d(query) + self.U_d(H))  # (-1 x T x m)
+        beta_t = tanh(self.W_d(query) + self.U_d(H))  # (-1 x T x m)
         beta_t = self.v_d(beta_t)  # (-1 x T x 1)
         beta_t = self.softmax(beta_t)  # (-1 x T x 1)
 
@@ -120,11 +120,11 @@ class Decoder(nn.Module):
         d_t, s_t = d_0, s_0
         self.lstm.reset_state(d_0, s_0)
 
-        for t in range(T-1):
+        for t in range(T):
             beta_t_1 = self.temporal_attention_score(d_t, s_t, H)  # (-1 x T x 1)
             c_t_1 = beta_t_1.permute(0, 2, 1).matmul(H)  # (-1 x 1 x m)
             
-            y_t_1_tilde = torch.cat([dec_data[:, [t], :], c_t_1], dim=2)  # (-1 x 1 x m+1)
+            y_t_1_tilde = cat([dec_data[:, [t], :], c_t_1], dim=2)  # (-1 x 1 x m+1)
             y_t_1_tilde = self.w_tilde(y_t_1_tilde)  # (-1 x 1 x 1)
             d_t, s_t = self.lstm(y_t_1_tilde)  # (1 x -1 x p)
 
@@ -132,7 +132,7 @@ class Decoder(nn.Module):
         c_t_1 = beta_t_1.permute(0, 2, 1).matmul(H)  # (-1 x 1 x m)
         d_t = d_t.permute(1, 0, 2)  # (-1 x 1 x p)
 
-        return torch.cat([d_t, c_t_1], dim=2)  # (-1 x 1 x m+p)
+        return cat([d_t, c_t_1], dim=2)  # (-1 x 1 x m+p)
 
 
 class DARNN(nn.Module):
@@ -171,7 +171,7 @@ class DARNN(nn.Module):
 
     def get_input_attention_score(self):
         if type(self.encoder.alpha_t) == list:
-            self.encoder.alpha_t = torch.cat(self.encoder.alpha_t, dim=1)  # (-1 x T+P x m)
+            self.encoder.alpha_t = cat(self.encoder.alpha_t, dim=1)  # (-1 x T+P x m)
         return self.encoder.alpha_t
 
 
@@ -209,14 +209,14 @@ class QARNN(nn.Module):
         dec_output1 = dec_output1.squeeze(dim=1)  # (-1 x m+p)
         dec_output2 = dec_output2.squeeze(dim=1)  # (-1 x m+p)
 
-        output = torch.cat([dec_output1, dec_output2], dim=1)  # (-1 x 2(m+p))
+        output = cat([dec_output1, dec_output2], dim=1)  # (-1 x 2(m+p))
         output = self.relu(self.linear1(output))  # (-1 x 2p)
         output = self.linear2(output)  # (-1 x P)
 
         return output
-    
+
 
     def get_input_attention_score(self):
         if type(self.encoder2.alpha_t) == list:
-            self.encoder2.alpha_t = torch.cat(self.encoder2.alpha_t, dim=1)  # (-1 x T+P x m)
+            self.encoder2.alpha_t = cat(self.encoder2.alpha_t, dim=1)  # (-1 x T+P x m)
         return self.encoder2.alpha_t

@@ -1,10 +1,12 @@
 import numpy as np
 import pandas as pd
 from tools.get_prediction_data import get_gen_forecast, get_weather_forecast, get_gen
+from tools.submission import submit
 import torch
 from tools.DARNN import QARNN
 device = torch.device('cuda')
 day_delta = lambda x: pd.Timedelta(days=x)
+
 
 
 print('prediction process just started.')
@@ -29,7 +31,7 @@ print('data preparation complete.')
 # final prediction
 y_pred = np.zeros((24, ))
 model = QARNN(72, 48, 18, 32, 32).to(device)
-model.load_state_dict(torch.load('checkpoints/qarnn_best_ver1.pt'))
+model.load_state_dict(torch.load('checkpoints/qarnn_best_ver2.pt'))
 print('model load complete.')
 
 model.eval()
@@ -39,3 +41,12 @@ with torch.no_grad():
     y_pred[-17:-5] = output
 print('prediction process finally complete. Result:\n')
 print(y_pred)
+y_pred = list(y_pred)
+
+submission = input('Do you want to submit above result? [y/n]: ')
+if submission == 'y':
+    submission_result = submit(y_pred)
+    if submission_result is True:
+        print('submission succeeded')
+    else:
+        print('submission failed.')

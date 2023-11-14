@@ -15,7 +15,7 @@ def calc_profit(y_pred: torch.Tensor, y_true: torch.Tensor):
     util_condition = (y_true>=9.9)
     error = (y_true-y_pred).abs() / 99.0 * 100
 
-    profit[util_condition & (error<=6)] = y_true[(y_true >= 9.9) & (error <= 6)] * 4
+    profit[util_condition & (error<=6)] = y_true[util_condition & (error <= 6)] * 4
     profit[util_condition & (error>6) & (error<=8)] = y_true[util_condition & (error>6) & (error<=8)] * 3
     profit = profit.sum(dim=1).mean().item()
 
@@ -46,7 +46,7 @@ class EarlyStopping:
         
 
 @torch.no_grad()
-def validation(model, val_loader, criterion, device=torch.device('cuda')):
+def validation(model, val_loader, device=torch.device('cuda')):
     y_test, y_pred = [], []
     relu = torch.relu
 
@@ -61,14 +61,14 @@ def validation(model, val_loader, criterion, device=torch.device('cuda')):
     y_test = torch.cat(y_test, dim=0) # (N x P), on cpu
     y_pred = torch.cat(y_pred, dim=0) # (N x P), on cpu
     
-    loss = criterion(y_pred, y_test).item()
+    loss = (y_pred-y_test).pow(2).mean().item()
     mae = (y_pred-y_test).abs().mean().item()
 
     r2 = (y_pred-y_test).pow(2).mean(dim=1)  # (N)
     r2 = 1 - r2 / y_test.var(dim=1, unbiased=False)  # (N)
     r2 = r2.mean().item()
 
-    profit = -calc_profit(y_pred, y_test)
+    profit = calc_profit(y_pred, y_test)
 
     return loss, r2, mae, profit
 
@@ -97,10 +97,9 @@ class Trainer:
 
         for epoch in range(epochs):
             train_loss = []
-            pbar = tqdm(total=len(train_loader))
+            pbar = tqdm(total=len(train_loader), desc=f'Epoch {epoch:3d}')
             pbar_update = pbar.update
             set_postfix = pbar.set_postfix
-            pbar.set_description(f'Epoch {epoch:2d}')
 
             model.train()
             for x1, x2, target in train_loader:
@@ -121,7 +120,7 @@ class Trainer:
             model.eval()
             train_loss = mean(train_loss)
             self.train_losses.append(train_loss)
-            val_loss, val_r2, val_mae, val_profit = validation(model, val_loader, criterion, device)
+            val_loss, val_r2, val_mae, val_profit = validation(model, val_loader, device)
 
             self.val_losses.append(val_loss)
             self.r2_results.append(val_r2)
@@ -135,8 +134,9 @@ class Trainer:
                 'Valid MAE': f'{val_mae:.4f}',
                 'Valid Profit': f'{val_profit:.1f}'
             })
+            pbar.close()
             
-            early_stopping(model, val_profit, epoch)
+            early_stopping(model, -val_profit, epoch)
             if early_stopping.early_stop:
                 print('Early Stopped')
                 break
@@ -152,7 +152,7 @@ class Trainer:
     @torch.no_grad()
     def test(self, test_loader):
         self.best_model.eval()
-        test_loss, test_r2, test_mae, test_profit = validation(self.best_model, test_loader, self.criterion, self.device)
+        test_loss, test_r2, test_mae, test_profit = validation(self.best_model, test_loader, self.device)
         print(f'Test Loss: {test_loss:.4f} | Test R2: {test_r2:.4f} | Test MAE: {test_mae:.4f} | Test Profit: {test_profit:.1f}')
         
         return None
